@@ -1,0 +1,6 @@
+{
+  "name": "BGMI ARENA",
+  "description": "Professional Mobile-First BGMI Esports Tournament Platform - Play. Compete. Climb.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
