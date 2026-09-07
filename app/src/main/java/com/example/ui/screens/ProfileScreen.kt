@@ -313,17 +313,6 @@ fun ProfileScreen(
               onClick = onNavigateToSupport
             )
 
-            // Evaluation Helper: Fast Switch between User & Admin role
-            ProfileMenuRow(
-              icon = Icons.Default.SwapHoriz,
-              label = "SWITCH TO ${if (user.role == UserRole.ADMIN) "PLAYER" else "ADMIN"} ROLE",
-              subtitle = "Fast testing shortcut for emulator review",
-              accentColor = ArenaCyan,
-              onClick = {
-                viewModel.switchUserRole(toAdmin = user.role != UserRole.ADMIN)
-              }
-            )
-
             ProfileMenuRow(
               icon = Icons.Default.Logout,
               label = "LOG OUT",

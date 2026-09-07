@@ -24,6 +24,12 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Tag
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.CameraAlt
+import coil.compose.AsyncImage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -72,6 +78,14 @@ fun EditProfileScreen(
   var bgmiName by remember { mutableStateOf<String>(user.bgmiName) }
   var bgmiUid by remember { mutableStateOf<String>(user.bgmiUid) }
   var errorMsg by remember { mutableStateOf<String?>(null) }
+
+  val photoPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri ->
+    if (uri != null) {
+      viewModel.updateAvatar(uri.toString())
+    }
+  }
 
   Column(
     modifier = modifier
@@ -122,6 +136,61 @@ fun EditProfileScreen(
       modifier = Modifier.fillMaxWidth()
     ) {
       Column(modifier = Modifier.padding(16.dp)) {
+        // Avatar picker
+        Box(
+          modifier = Modifier
+            .align(Alignment.CenterHorizontally)
+            .padding(bottom = 16.dp),
+          contentAlignment = Alignment.BottomEnd
+        ) {
+          Box(
+            modifier = Modifier
+              .size(80.dp)
+              .clip(CircleShape)
+              .background(Brush.linearGradient(listOf(ArenaPurple, ArenaCyan)))
+              .padding(2.5.dp)
+              .clip(CircleShape)
+              .background(ArenaBgDark),
+            contentAlignment = Alignment.Center
+          ) {
+            if (user.avatarUrl.isNotEmpty()) {
+              AsyncImage(
+                model = user.avatarUrl,
+                contentDescription = "Avatar",
+                modifier = Modifier.fillMaxSize()
+              )
+            } else {
+              Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = "Default Avatar",
+                tint = ArenaCyan,
+                modifier = Modifier.size(44.dp)
+              )
+            }
+          }
+
+          Box(
+            modifier = Modifier
+              .size(28.dp)
+              .clip(CircleShape)
+              .background(ArenaCyan)
+              .clickable {
+                photoPickerLauncher.launch(
+                  PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+              }
+              .testTag("change_avatar_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = Icons.Default.CameraAlt,
+              contentDescription = "Change Avatar",
+              tint = ArenaBgDark,
+              modifier = Modifier.size(16.dp)
+            )
+          }
+        }
+
         if (errorMsg != null) {
           Text(
             text = errorMsg!!,

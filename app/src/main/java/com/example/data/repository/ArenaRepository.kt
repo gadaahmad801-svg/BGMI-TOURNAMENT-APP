@@ -200,6 +200,21 @@ class ArenaRepository {
     return Result.success(updated)
   }
 
+  fun updateAvatar(avatarUrl: String): Result<User> {
+    val user = _currentUser.value ?: return Result.failure(Exception("User not authenticated."))
+    val cleanUrl = avatarUrl.trim()
+    if (cleanUrl.isNotEmpty() && !cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://") && !cleanUrl.startsWith("content://") && !cleanUrl.startsWith("android.resource://")) {
+      return Result.failure(Exception("Invalid avatar URI format."))
+    }
+    if (cleanUrl.length > 1000) {
+      return Result.failure(Exception("Avatar URL exceeds maximum allowed length."))
+    }
+    val updated = user.copy(avatarUrl = cleanUrl, updatedAt = System.currentTimeMillis())
+    _currentUser.value = updated
+    _users.value = _users.value.map { if (it.uid == user.uid) updated else it }
+    return Result.success(updated)
+  }
+
   fun updatePreferences(notifications: Boolean, sound: Boolean, reducedMotion: Boolean) {
     val user = _currentUser.value ?: return
     val updated = user.copy(
@@ -213,6 +228,15 @@ class ArenaRepository {
     _users.value = _users.value.map { if (it.uid == user.uid) updated else it }
   }
 
+  fun setCurrentUser(user: User) {
+    _currentUser.value = user
+    if (_users.value.none { it.uid == user.uid }) {
+      _users.value = _users.value + user
+    } else {
+      _users.value = _users.value.map { if (it.uid == user.uid) user else it }
+    }
+  }
+
   fun logout() {
     _currentUser.value = null
   }
@@ -223,6 +247,10 @@ class ArenaRepository {
 
   @Synchronized
   fun addCoinReward(uid: String, amount: Int, reason: String, referenceId: String = ""): Result<Int> {
+    val caller = _currentUser.value
+    if (caller != null && caller.role != UserRole.ADMIN) {
+      return Result.failure(Exception("Unauthorized: Only administrators or official match referees can issue coin rewards."))
+    }
     if (amount <= 0) return Result.failure(Exception("Reward amount must be positive."))
     val targetUser = _users.value.find { it.uid == uid }
       ?: return Result.failure(Exception("User not found."))
@@ -259,6 +287,41 @@ class ArenaRepository {
       targetType = "USER",
       targetId = uid,
       metadata = "Amount: $amount, Reason: $reason"
+    )
+
+    return Result.success(after)
+  }
+
+  @Synchronized
+  fun deductCoins(uid: String, amount: Int, reason: String, referenceId: String = ""): Result<Int> {
+    val caller = _currentUser.value
+    if (caller != null && caller.role != UserRole.ADMIN) {
+      return Result.failure(Exception("Unauthorized: Only administrators can adjust coin balances."))
+    }
+    if (amount <= 0) return Result.failure(Exception("Deduction amount must be positive."))
+    val targetUser = _users.value.find { it.uid == uid }
+      ?: return Result.failure(Exception("User not found."))
+
+    val before = targetUser.virtualCoins
+    val after = before - amount
+    if (after < MIN_VIRTUAL_COINS) {
+      return Result.failure(Exception("Virtual coin balance cannot fall below $MIN_VIRTUAL_COINS coins."))
+    }
+
+    val updatedUser = targetUser.copy(virtualCoins = after)
+    _users.value = _users.value.map { if (it.uid == uid) updatedUser else it }
+    if (_currentUser.value?.uid == uid) {
+      _currentUser.value = updatedUser
+    }
+
+    addCoinTransaction(
+      uid = uid,
+      type = TransactionType.ADJUSTMENT,
+      amount = -amount,
+      balanceBefore = before,
+      balanceAfter = after,
+      reason = reason,
+      referenceId = referenceId
     )
 
     return Result.success(after)

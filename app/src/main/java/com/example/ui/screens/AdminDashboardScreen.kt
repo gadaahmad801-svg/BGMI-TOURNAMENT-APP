@@ -105,6 +105,52 @@ fun AdminDashboardScreen(
   var showCreateTournamentDialog by remember { mutableStateOf(false) }
   var showFinalizeResultDialog by remember { mutableStateOf<Match?>(null) }
 
+  if (currentUser == null || currentUser?.role != com.example.data.model.UserRole.ADMIN) {
+    Box(
+      modifier = modifier
+        .fillMaxSize()
+        .background(ArenaBgDark)
+        .statusBarsPadding()
+        .padding(24.dp),
+      contentAlignment = Alignment.Center
+    ) {
+      Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+      ) {
+        Icon(
+          imageVector = Icons.Default.Shield,
+          contentDescription = "Access Denied",
+          tint = ArenaDanger,
+          modifier = Modifier.size(64.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+          text = "ACCESS DENIED",
+          style = MaterialTheme.typography.titleLarge,
+          color = ArenaTextPrimary,
+          fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+          text = "Administrator privileges are required to access this control center.",
+          color = ArenaTextSecondary,
+          fontSize = 13.sp,
+          textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(
+          onClick = onBack,
+          colors = ButtonDefaults.buttonColors(containerColor = ArenaCyan),
+          shape = RoundedCornerShape(10.dp)
+        ) {
+          Text("Return to Safety", color = ArenaBgDark, fontWeight = FontWeight.Bold)
+        }
+      }
+    }
+    return
+  }
+
   Column(
     modifier = modifier
       .fillMaxSize()

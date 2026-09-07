@@ -141,35 +141,68 @@ fun LeaderboardScreen(
         }
       }
 
-      // PODIUM: Top 3 (2nd, 1st, 3rd)
-      if (leaderboard.size >= 3) {
+      if (leaderboard.isEmpty()) {
         item {
-          val first = leaderboard.getOrNull(0)
-          val second = leaderboard.getOrNull(1)
-          val third = leaderboard.getOrNull(2)
-
-          if (first != null && second != null && third != null) {
-            EsportsPodiumSection(first = first, second = second, third = third)
-            Spacer(modifier = Modifier.height(16.dp))
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(vertical = 40.dp),
+            contentAlignment = Alignment.Center
+          ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+              Icon(
+                imageVector = Icons.Default.EmojiEvents,
+                contentDescription = null,
+                tint = ArenaTextMuted,
+                modifier = Modifier.size(54.dp)
+              )
+              Spacer(modifier = Modifier.height(12.dp))
+              Text(
+                text = "No Rankings Recorded",
+                color = ArenaTextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+              )
+              Text(
+                text = "Compete in official tournaments to earn placement and kill points.",
+                color = ArenaTextMuted,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
+              )
+            }
           }
         }
-      }
+      } else {
+        // PODIUM: Top 3 (2nd, 1st, 3rd)
+        if (leaderboard.size >= 3) {
+          item {
+            val first = leaderboard.getOrNull(0)
+            val second = leaderboard.getOrNull(1)
+            val third = leaderboard.getOrNull(2)
 
-      // Rest of the ranks (#4 onwards)
-      item {
-        Text(
-          text = "CHALLENGERS LINEUP",
-          color = ArenaTextMuted,
-          fontSize = 11.sp,
-          fontWeight = FontWeight.Bold,
-          letterSpacing = 1.sp,
-          modifier = Modifier.padding(vertical = 8.dp)
-        )
-      }
+            if (first != null && second != null && third != null) {
+              EsportsPodiumSection(first = first, second = second, third = third)
+              Spacer(modifier = Modifier.height(16.dp))
+            }
+          }
+        }
 
-      val remainingEntries = if (leaderboard.size > 3) leaderboard.drop(3) else leaderboard
-      items(remainingEntries, key = { it.rank }) { entry ->
-        LeaderboardRowItem(entry = entry)
+        // Rest of the ranks (#4 onwards)
+        item {
+          Text(
+            text = "CHALLENGERS LINEUP",
+            color = ArenaTextMuted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(vertical = 8.dp)
+          )
+        }
+
+        val remainingEntries = if (leaderboard.size > 3) leaderboard.drop(3) else leaderboard
+        items(remainingEntries, key = { it.rank }) { entry ->
+          LeaderboardRowItem(entry = entry)
+        }
       }
     }
   }

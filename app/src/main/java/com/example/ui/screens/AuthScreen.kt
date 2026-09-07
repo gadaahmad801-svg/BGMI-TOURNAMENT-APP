@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -424,7 +425,45 @@ fun AuthScreen(
         }
       }
 
-      Spacer(modifier = Modifier.height(24.dp))
+      Spacer(modifier = Modifier.height(12.dp))
+
+      val context = LocalContext.current
+
+      // Google Sign-In via Credential Manager & Firebase Auth
+      Button(
+        onClick = {
+          errorMessage = null
+          isLoading = true
+          viewModel.signInWithGoogle(
+            context = context,
+            onSuccess = {
+              isLoading = false
+              onAuthSuccess()
+            },
+            onError = {
+              isLoading = false
+              errorMessage = it
+            }
+          )
+        },
+        enabled = !isLoading,
+        colors = ButtonDefaults.buttonColors(containerColor = ArenaCardElevated),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, ArenaCyan.copy(alpha = 0.4f)),
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(48.dp)
+          .testTag("google_sign_in_button")
+      ) {
+        Text(
+          text = "G   Sign in with Google",
+          color = ArenaTextPrimary,
+          fontWeight = FontWeight.Bold,
+          fontSize = 13.sp
+        )
+      }
+
+      Spacer(modifier = Modifier.height(20.dp))
 
       // Quick Demo Access Shortcuts for Easy Testing
       Card(

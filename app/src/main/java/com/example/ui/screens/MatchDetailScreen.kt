@@ -69,6 +69,7 @@ import com.example.ui.theme.ArenaSuccess
 import com.example.ui.theme.ArenaTextMuted
 import com.example.ui.theme.ArenaTextPrimary
 import com.example.ui.theme.ArenaTextSecondary
+import com.example.ui.theme.ArenaWarning
 import com.example.ui.viewmodel.ArenaViewModel
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -84,7 +85,22 @@ fun MatchDetailScreen(
 ) {
   val context = LocalContext.current
   val matches by viewModel.matches.collectAsState()
+  val currentUser by viewModel.currentUser.collectAsState()
+  val teams by viewModel.teams.collectAsState()
   val match = matches.find { it.matchId == matchId }
+
+  val isParticipantOrAdmin = remember(currentUser, teams, match?.tournamentId) {
+    val user = currentUser
+    if (user == null || match == null) false
+    else if (user.role == com.example.data.model.UserRole.ADMIN) true
+    else {
+      teams.any { t ->
+        t.tournamentId == match.tournamentId && (
+          t.captainUid == user.uid || t.players.any { it.bgmiUid == user.bgmiUid }
+        )
+      }
+    }
+  }
 
   if (match == null) {
     Box(
@@ -93,7 +109,16 @@ fun MatchDetailScreen(
         .background(ArenaBgDark),
       contentAlignment = Alignment.Center
     ) {
-      Text("Match not found", color = ArenaTextPrimary)
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Match not found", color = ArenaTextPrimary, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+          onClick = onBack,
+          colors = ButtonDefaults.buttonColors(containerColor = ArenaCyan)
+        ) {
+          Text("Go Back", color = ArenaBgDark, fontWeight = FontWeight.Bold)
+        }
+      }
     }
     return
   }
@@ -280,7 +305,7 @@ fun MatchDetailScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (match.isRoomPublished) {
+        if (match.isRoomPublished && isParticipantOrAdmin) {
           // ROOM ID ROW
           Column(
             modifier = Modifier
@@ -363,6 +388,34 @@ fun MatchDetailScreen(
             color = ArenaTextSecondary,
             fontSize = 11.sp
           )
+        } else if (match.isRoomPublished && !isParticipantOrAdmin) {
+          // RESTRICTED TO VERIFIED REGISTERED PLAYERS
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
+              .background(ArenaCardElevated)
+              .padding(20.dp),
+            contentAlignment = Alignment.Center
+          ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+              Icon(Icons.Default.Lock, contentDescription = null, tint = ArenaWarning, modifier = Modifier.size(32.dp))
+              Spacer(modifier = Modifier.height(8.dp))
+              Text(
+                text = "PARTICIPANTS ONLY",
+                color = ArenaWarning,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+              )
+              Spacer(modifier = Modifier.height(4.dp))
+              Text(
+                text = "Room credentials are protected and only released to verified registered players and match referees.",
+                color = ArenaTextSecondary,
+                fontSize = 11.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+              )
+            }
+          }
         } else {
           // UNPUBLISHED PLACEHOLDER
           Box(

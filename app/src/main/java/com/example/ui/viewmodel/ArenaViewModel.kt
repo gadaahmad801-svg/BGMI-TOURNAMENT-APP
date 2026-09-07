@@ -35,6 +35,7 @@ class ArenaViewModel(
   val currentUser: StateFlow<User?> = repository.currentUser
   val allUsers: StateFlow<List<User>> = repository.users
   val tournaments: StateFlow<List<Tournament>> = repository.tournaments
+  val teams: StateFlow<List<Team>> = repository.teams
   val matches: StateFlow<List<Match>> = repository.matches
   val leaderboard: StateFlow<List<LeaderboardEntry>> = repository.leaderboard
   val transactions: StateFlow<List<CoinTransaction>> = repository.transactions
@@ -131,23 +132,6 @@ class ArenaViewModel(
     showToast(if (_isOffline.value) "Device is now offline" else "Back online!")
   }
 
-  // Fast Account Switcher for Reviewing User vs Admin Views in Preview
-  fun switchUserRole(toAdmin: Boolean) {
-    val usersList = repository.users.value
-    if (toAdmin) {
-      val admin = usersList.find { it.role == UserRole.ADMIN }
-      if (admin != null) {
-        repository.login(admin.email, "admin123")
-        showToast("Switched to Admin: ${admin.displayName}")
-      }
-    } else {
-      val regular = usersList.find { it.role == UserRole.USER }
-      if (regular != null) {
-        repository.login(regular.email, "user123")
-        showToast("Switched to User: ${regular.displayName}")
-      }
-    }
-  }
 
   fun login(email: String, pass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
     viewModelScope.launch {
@@ -182,6 +166,25 @@ class ArenaViewModel(
     }
   }
 
+  fun signInWithGoogle(context: android.content.Context, webClientId: String = "", onSuccess: () -> Unit, onError: (String) -> Unit) {
+    viewModelScope.launch {
+      val authManager = com.example.data.auth.FirebaseAuthManager(context)
+      if (!authManager.isAvailable()) {
+        onError("Firebase Auth requires google-services.json. You can use email/password or demo login.")
+        return@launch
+      }
+      val clientId = webClientId.ifBlank { "default_client_id" }
+      val result = authManager.signInWithGoogle(clientId)
+      result.onSuccess { user ->
+        repository.setCurrentUser(user)
+        showToast("Signed in as ${user.displayName}")
+        onSuccess()
+      }.onFailure { e ->
+        onError(e.message ?: "Google Sign-In failed")
+      }
+    }
+  }
+
   fun logout(onSuccess: () -> Unit) {
     repository.logout()
     showToast("Logged out safely.")
@@ -195,6 +198,15 @@ class ArenaViewModel(
       onSuccess()
     }.onFailure {
       onError(it.message ?: "Failed to update profile")
+    }
+  }
+
+  fun updateAvatar(avatarUri: String) {
+    val res = repository.updateAvatar(avatarUri)
+    res.onSuccess {
+      showToast("Avatar updated successfully!")
+    }.onFailure {
+      showToast(it.message ?: "Failed to update avatar")
     }
   }
 

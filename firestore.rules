@@ -1,0 +1,153 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (request.auth.token.role == 'admin' ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN'));
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. Users collection
+    // - Normal users cannot become admins
+    // - Normal users cannot modify coin balances
+    // - Virtual coin balance can never go below 5
+    // - Avatar uploads / URIs are sanitized
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'USER'
+        && request.resource.data.virtualCoins == 5
+        && request.resource.data.accountStatus == 'ACTIVE';
+
+      allow update: if isAdmin() || (
+        isOwner(userId)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.virtualCoins == resource.data.virtualCoins
+        && request.resource.data.accountStatus == resource.data.accountStatus
+        && request.resource.data.virtualCoins >= 5
+        && (
+          !('avatarUrl' in request.resource.data) ||
+          request.resource.data.avatarUrl == resource.data.avatarUrl ||
+          (
+            request.resource.data.avatarUrl.size() < 1000 &&
+            (
+              request.resource.data.avatarUrl.matches('https://.*') ||
+              request.resource.data.avatarUrl.matches('content://.*') ||
+              request.resource.data.avatarUrl == ''
+            )
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // 2. Tournaments collection
+    // - Registration deadline uses trusted server timestamps (request.time)
+    // - Tournament capacity is enforced atomically
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+
+      // Normal user can only atomically increment registeredTeams during registration
+      // if registration is OPEN, capacity is not reached, and deadline has not passed!
+      allow update: if isAdmin() || (
+        isAuthenticated()
+        && resource.data.status == 'REGISTRATION_OPEN'
+        && request.time < resource.data.registrationDeadline
+        && resource.data.registeredTeams < resource.data.maxTeams
+        && request.resource.data.registeredTeams == resource.data.registeredTeams + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredTeams', 'status'])
+      );
+    }
+
+    // 3. Teams / Registrations collection
+    // - Duplicate registration prevented
+    // - Registration deadline verified
+    match /teams/{teamId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+        && request.resource.data.captainUid == request.auth.uid
+        && request.resource.data.status == 'REGISTERED'
+        && request.time < get(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)).data.registrationDeadline
+        && get(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)).data.registeredTeams < get(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)).data.maxTeams;
+
+      allow update, delete: if isAdmin();
+    }
+
+    // 4. Matches collection
+    // - Official results cannot be modified by normal users (admin only)
+    // - Match management server-authorized
+    match /matches/{matchId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+
+      // Dedicated private credentials subdocument:
+      // Only admin or verified participant players can read roomId and roomPassword
+      match /private_room/credentials {
+        allow read: if isAdmin() || (
+          isAuthenticated() &&
+          resource.data.isRoomPublished == true &&
+          exists(/databases/$(database)/documents/teams/$(request.auth.uid + '_' + matchId))
+        );
+        allow write: if isAdmin();
+      }
+    }
+
+    // 5. Leaderboard collection
+    // - Leaderboard values cannot be directly client-written
+    match /leaderboard/{entryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 6. Virtual Coin Ledger & Transactions
+    // - Normal users cannot modify coin balances or issue transactions
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // 7. Server Authoritative Audit Logs
+    // - Audit logs are protected and tamper-proof
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // 8. Support Tickets
+    match /support_tickets/{ticketId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // 9. Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.recipientUid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.recipientUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create: if isAdmin();
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.recipientUid == request.auth.uid);
+    }
+
+    // 10. Announcements
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

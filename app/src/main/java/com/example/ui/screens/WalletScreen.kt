@@ -249,8 +249,47 @@ fun WalletScreen(
       }
 
       // 4. Transaction Items
-      items(transactions, key = { it.transactionId }) { txn ->
-        TransactionRowItem(transaction = txn)
+      if (transactions.isEmpty()) {
+        item {
+          Card(
+            colors = CardDefaults.cardColors(containerColor = ArenaCardBg),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, ArenaBorder),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+              horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+              Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = ArenaTextMuted,
+                modifier = Modifier.size(36.dp)
+              )
+              Spacer(modifier = Modifier.height(8.dp))
+              Text(
+                text = "No Transactions Yet",
+                color = ArenaTextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+              )
+              Spacer(modifier = Modifier.height(4.dp))
+              Text(
+                text = "Earn virtual coins by placing on the podium in official tournaments.",
+                color = ArenaTextMuted,
+                fontSize = 12.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+              )
+            }
+          }
+        }
+      } else {
+        items(transactions, key = { it.transactionId }) { txn ->
+          TransactionRowItem(transaction = txn)
+        }
       }
     }
   }

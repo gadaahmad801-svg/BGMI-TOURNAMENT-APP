@@ -105,7 +105,16 @@ fun TournamentDetailScreen(
         .background(ArenaBgDark),
       contentAlignment = Alignment.Center
     ) {
-      Text("Tournament not found", color = ArenaTextPrimary)
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Tournament not found", color = ArenaTextPrimary, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+          onClick = onBack,
+          colors = ButtonDefaults.buttonColors(containerColor = ArenaCyan)
+        ) {
+          Text("Go Back", color = ArenaBgDark, fontWeight = FontWeight.Bold)
+        }
+      }
     }
     return
   }
