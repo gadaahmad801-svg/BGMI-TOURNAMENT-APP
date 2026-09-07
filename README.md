@@ -55,15 +55,23 @@ BGMI ARENA is a modern, mobile-first Android application designed for BGMI (Batt
 
 BGMI ARENA includes full offline-first caching and built-in fallback data. To connect your live Firebase project:
 
-1. **Create a Firebase Project:**
+1. **Create a Firebase Project & Add Android App:**
    - Go to the [Firebase Console](https://console.firebase.google.com/).
-   - Add an Android App with package name `com.example` (or the `applicationId` defined in `app/build.gradle.kts`).
+   - Add an Android App with package name `com.example` (or your configured `applicationId` in `app/build.gradle.kts`).
+   - Add your **SHA-1 and SHA-256 fingerprints** (from your keystore or run `gradle :app:signingReport`).
    - Download the generated `google-services.json` and place it in the `/app` directory:
      ```
      app/google-services.json
      ```
 
-2. **Deploy Firestore Security Rules:**
+2. **Enable Gmail / Google Authentication:**
+   - In the Firebase Console, navigate to **Build > Authentication > Sign-in method**.
+   - Enable **Google** provider and configure your project support email.
+   - (Optional) Enable **Email/Password** provider for password-based logins and password resets.
+   - When `google-services.json` is placed in `/app`, the Web Client ID (`default_web_client_id`) is automatically resolved by the Google Services plugin.
+   - The app also provides an in-app **Firebase Gmail Setup & Web Client ID** dialog to verify connection status, inspect client IDs, and test Google Sign-In.
+
+3. **Deploy Firestore Security Rules:**
    - Install the Firebase CLI (`npm install -g firebase-tools`).
    - Run:
      ```bash

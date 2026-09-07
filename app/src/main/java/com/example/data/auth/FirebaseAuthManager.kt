@@ -17,13 +17,20 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.tasks.await
 
+data class FirebaseAuthConfig(
+  val isFirebaseInitialized: Boolean,
+  val hasWebClientId: Boolean,
+  val webClientId: String,
+  val message: String
+)
+
 class FirebaseAuthManager(private val context: Context) {
 
   companion object {
     private const val TAG = "FirebaseAuthManager"
   }
 
-  private val auth: FirebaseAuth?
+  val auth: FirebaseAuth?
     get() = try {
       if (FirebaseApp.getApps(context).isNotEmpty()) {
         FirebaseAuth.getInstance()
@@ -37,14 +44,60 @@ class FirebaseAuthManager(private val context: Context) {
 
   fun isAvailable(): Boolean = auth != null
 
-  suspend fun signInWithGoogle(webClientId: String): Result<User> {
-    val firebaseAuth = auth ?: return Result.failure(Exception("Firebase is not connected. Requires google-services.json."))
+  /**
+   * Resolves the Web Client ID either from auto-generated google-services resources or custom input.
+   */
+  fun resolveWebClientId(customClientId: String = ""): String {
+    if (customClientId.isNotBlank()) return customClientId.trim()
+    return try {
+      val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+      if (resId != 0) context.getString(resId).trim() else ""
+    } catch (e: Exception) {
+      ""
+    }
+  }
+
+  fun checkAuthConfig(customClientId: String = ""): FirebaseAuthConfig {
+    val isInit = isAvailable()
+    val clientId = resolveWebClientId(customClientId)
+    val hasClient = clientId.isNotBlank()
+
+    val msg = when {
+      !isInit -> "Firebase is not initialized. Place 'google-services.json' in the app/ directory."
+      !hasClient -> "Web Client ID not found. Ensure Google provider is enabled in Firebase Console and google-services.json is added."
+      else -> "Firebase Authentication and Google Sign-In are ready."
+    }
+
+    return FirebaseAuthConfig(
+      isFirebaseInitialized = isInit,
+      hasWebClientId = hasClient,
+      webClientId = clientId,
+      message = msg
+    )
+  }
+
+  suspend fun signInWithGoogle(customWebClientId: String = ""): Result<User> {
+    val firebaseAuth = auth ?: return Result.failure(
+      Exception("Firebase is not initialized. Please place 'google-services.json' in the app/ directory.")
+    )
+
+    val webClientId = resolveWebClientId(customWebClientId)
+    if (webClientId.isBlank()) {
+      return Result.failure(
+        Exception(
+          "Google Sign-In setup incomplete: Web Client ID is missing. " +
+          "Enable Google Sign-In in Firebase Console (Authentication > Sign-in method) " +
+          "and add the updated google-services.json to the app/ directory."
+        )
+      )
+    }
+
     return try {
       val credentialManager = CredentialManager.create(context)
       val googleIdOption = GetGoogleIdOption.Builder()
         .setFilterByAuthorizedAccounts(false)
         .setServerClientId(webClientId)
-        .setAutoSelectEnabled(true)
+        .setAutoSelectEnabled(false)
         .build()
 
       val request = GetCredentialRequest.Builder()
@@ -62,7 +115,7 @@ class FirebaseAuthManager(private val context: Context) {
 
       val user = User(
         uid = fbUser.uid,
-        displayName = fbUser.displayName ?: "Arena Warrior",
+        displayName = fbUser.displayName ?: fbUser.email?.substringBefore("@") ?: "Arena Warrior",
         email = fbUser.email ?: "",
         bgmiName = "Warrior_${fbUser.uid.take(5)}",
         bgmiUid = "5${System.currentTimeMillis().toString().takeLast(9)}",
@@ -78,7 +131,7 @@ class FirebaseAuthManager(private val context: Context) {
       Result.success(user)
     } catch (e: GetCredentialException) {
       Log.e(TAG, "Credential Manager error: ${e.message}", e)
-      Result.failure(e)
+      Result.failure(Exception("Google Sign-In cancelled or failed: ${e.message}"))
     } catch (e: Exception) {
       Log.e(TAG, "Google Sign-In failed: ${e.message}", e)
       Result.failure(e)
@@ -100,6 +153,16 @@ class FirebaseAuthManager(private val context: Context) {
     return try {
       val res = firebaseAuth.createUserWithEmailAndPassword(email, pass).await()
       Result.success(res.user?.uid ?: "")
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+    val firebaseAuth = auth ?: return Result.failure(Exception("Firebase not connected."))
+    return try {
+      firebaseAuth.sendPasswordResetEmail(email).await()
+      Result.success(Unit)
     } catch (e: Exception) {
       Result.failure(e)
     }

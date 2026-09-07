@@ -166,21 +166,39 @@ class ArenaViewModel(
     }
   }
 
+  fun getFirebaseAuthConfig(context: android.content.Context, webClientId: String = ""): com.example.data.auth.FirebaseAuthConfig {
+    return com.example.data.auth.FirebaseAuthManager(context).checkAuthConfig(webClientId)
+  }
+
   fun signInWithGoogle(context: android.content.Context, webClientId: String = "", onSuccess: () -> Unit, onError: (String) -> Unit) {
     viewModelScope.launch {
       val authManager = com.example.data.auth.FirebaseAuthManager(context)
-      if (!authManager.isAvailable()) {
-        onError("Firebase Auth requires google-services.json. You can use email/password or demo login.")
-        return@launch
-      }
-      val clientId = webClientId.ifBlank { "default_client_id" }
-      val result = authManager.signInWithGoogle(clientId)
+      val result = authManager.signInWithGoogle(webClientId)
       result.onSuccess { user ->
         repository.setCurrentUser(user)
         showToast("Signed in as ${user.displayName}")
         onSuccess()
       }.onFailure { e ->
         onError(e.message ?: "Google Sign-In failed")
+      }
+    }
+  }
+
+  fun sendPasswordResetEmail(context: android.content.Context, email: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    viewModelScope.launch {
+      val authManager = com.example.data.auth.FirebaseAuthManager(context)
+      if (authManager.isAvailable()) {
+        val result = authManager.sendPasswordResetEmail(email)
+        result.onSuccess {
+          showToast("Password reset email sent to $email")
+          onSuccess()
+        }.onFailure { e ->
+          onError(e.message ?: "Failed to send reset email")
+        }
+      } else {
+        // Fallback local simulation when Firebase is offline
+        showToast("Simulation: Password reset email sent to $email")
+        onSuccess()
       }
     }
   }

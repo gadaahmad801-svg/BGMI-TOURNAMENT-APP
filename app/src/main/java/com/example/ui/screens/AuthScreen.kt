@@ -76,6 +76,7 @@ import com.example.ui.theme.ArenaPurpleBright
 import com.example.ui.theme.ArenaTextMuted
 import com.example.ui.theme.ArenaTextPrimary
 import com.example.ui.theme.ArenaTextSecondary
+import com.example.ui.theme.ArenaWarning
 import com.example.ui.viewmodel.ArenaViewModel
 
 @Composable
@@ -98,6 +99,8 @@ fun AuthScreen(
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var isLoading by remember { mutableStateOf(false) }
   var showForgotPasswordDialog by remember { mutableStateOf(false) }
+  var showGmailSetupDialog by remember { mutableStateOf(false) }
+  var customWebClientId by remember { mutableStateOf("") }
 
   val scrollState = rememberScrollState()
 
@@ -436,6 +439,7 @@ fun AuthScreen(
           isLoading = true
           viewModel.signInWithGoogle(
             context = context,
+            webClientId = customWebClientId,
             onSuccess = {
               isLoading = false
               onAuthSuccess()
@@ -456,14 +460,28 @@ fun AuthScreen(
           .testTag("google_sign_in_button")
       ) {
         Text(
-          text = "G   Sign in with Google",
+          text = "G   Sign in with Google (Gmail)",
           color = ArenaTextPrimary,
           fontWeight = FontWeight.Bold,
           fontSize = 13.sp
         )
       }
 
-      Spacer(modifier = Modifier.height(20.dp))
+      Spacer(modifier = Modifier.height(6.dp))
+
+      TextButton(
+        onClick = { showGmailSetupDialog = true },
+        modifier = Modifier.testTag("gmail_setup_guide_button")
+      ) {
+        Text(
+          text = "⚙️ Firebase Gmail Setup & Web Client ID",
+          color = ArenaCyan,
+          fontSize = 11.sp,
+          fontWeight = FontWeight.SemiBold
+        )
+      }
+
+      Spacer(modifier = Modifier.height(14.dp))
 
       // Quick Demo Access Shortcuts for Easy Testing
       Card(
@@ -528,32 +546,42 @@ fun AuthScreen(
 
   // Forgot Password Dialog
   if (showForgotPasswordDialog) {
+    val context = LocalContext.current
     var resetEmail by remember { mutableStateOf(email) }
     var resetSent by remember { mutableStateOf(false) }
+    var resetError by remember { mutableStateOf<String?>(null) }
+    var isSending by remember { mutableStateOf(false) }
 
     AlertDialog(
       onDismissRequest = { showForgotPasswordDialog = false },
       containerColor = ArenaCardElevated,
-      title = { Text("Reset Password", color = ArenaTextPrimary, fontWeight = FontWeight.Bold) },
+      title = { Text("Reset Password via Gmail/Email", color = ArenaTextPrimary, fontWeight = FontWeight.Bold) },
       text = {
         Column {
           Text(
-            text = "Enter your registered email address to receive password reset instructions.",
+            text = "Enter your registered Gmail / Email address to receive Firebase password reset instructions.",
             color = ArenaTextSecondary,
             fontSize = 13.sp
           )
           Spacer(modifier = Modifier.height(12.dp))
           OutlinedTextField(
             value = resetEmail,
-            onValueChange = { resetEmail = it },
-            label = { Text("Email Address") },
+            onValueChange = {
+              resetEmail = it
+              resetError = null
+            },
+            label = { Text("Email / Gmail Address") },
             colors = arenaTextFieldColors(),
             shape = RoundedCornerShape(10.dp),
             modifier = Modifier.fillMaxWidth()
           )
           if (resetSent) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Reset instructions sent to $resetEmail!", color = ArenaCyan, fontSize = 12.sp)
+            Text("✅ Password reset email dispatched to $resetEmail!", color = ArenaCyan, fontSize = 12.sp)
+          }
+          if (resetError != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("⚠️ $resetError", color = ArenaDanger, fontSize = 12.sp)
           }
         }
       },
@@ -561,10 +589,25 @@ fun AuthScreen(
         Button(
           onClick = {
             if (resetEmail.contains("@")) {
-              resetSent = true
-              viewModel.showToast("Reset instructions sent.")
+              isSending = true
+              resetError = null
+              viewModel.sendPasswordResetEmail(
+                context = context,
+                email = resetEmail.trim(),
+                onSuccess = {
+                  isSending = false
+                  resetSent = true
+                },
+                onError = {
+                  isSending = false
+                  resetError = it
+                }
+              )
+            } else {
+              resetError = "Please enter a valid email address."
             }
           },
+          enabled = !isSending,
           colors = ButtonDefaults.buttonColors(containerColor = ArenaCyan)
         ) {
           Text("SEND RESET LINK", color = ArenaBgDark, fontWeight = FontWeight.Bold)
@@ -573,6 +616,119 @@ fun AuthScreen(
       dismissButton = {
         TextButton(onClick = { showForgotPasswordDialog = false }) {
           Text("CLOSE", color = ArenaTextSecondary)
+        }
+      }
+    )
+  }
+
+  // Firebase Authentication Gmail Setup Guide Dialog
+  if (showGmailSetupDialog) {
+    val context = LocalContext.current
+    val authConfig = remember(customWebClientId) { viewModel.getFirebaseAuthConfig(context, customWebClientId) }
+
+    AlertDialog(
+      onDismissRequest = { showGmailSetupDialog = false },
+      containerColor = ArenaCardElevated,
+      shape = RoundedCornerShape(18.dp),
+      title = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text("Firebase Gmail Auth Setup", color = ArenaTextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+      },
+      text = {
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+          Text(
+            text = "To enable 1-tap Google Sign-In with Gmail in production:",
+            color = ArenaTextSecondary,
+            fontSize = 13.sp
+          )
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Status Cards
+          Card(
+            colors = CardDefaults.cardColors(containerColor = ArenaCardBg),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, if (authConfig.isFirebaseInitialized) ArenaCyan.copy(alpha = 0.5f) else ArenaWarning.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+              Text(
+                text = if (authConfig.isFirebaseInitialized) "✅ Firebase SDK: Connected" else "⚠️ Firebase SDK: Awaiting google-services.json",
+                color = if (authConfig.isFirebaseInitialized) ArenaCyan else ArenaWarning,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+              )
+              Spacer(modifier = Modifier.height(4.dp))
+              Text(
+                text = if (authConfig.hasWebClientId) "✅ Web Client ID: Configured (${authConfig.webClientId.take(12)}...)" else "⚠️ Web Client ID: Missing",
+                color = if (authConfig.hasWebClientId) ArenaCyan else ArenaWarning,
+                fontSize = 11.sp
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+
+          Text(
+            text = "Step-by-Step Setup Guide:",
+            color = ArenaTextPrimary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp
+          )
+          Spacer(modifier = Modifier.height(6.dp))
+
+          Text(
+            text = "1. Firebase Console:\n   Go to Authentication > Sign-in method > Enable Google.\n\n" +
+                   "2. Add Android Fingerprint:\n   Go to Project Settings > Add Fingerprint (SHA-1 from debug keystore).\n\n" +
+                   "3. Google Services JSON:\n   Download 'google-services.json' and place it in the '/app' directory of the project.\n\n" +
+                   "4. Optional Web Client ID Override:\n   If testing without google-services.json, enter your OAuth 2.0 Web Client ID below.",
+            color = ArenaTextSecondary,
+            fontSize = 12.sp,
+            lineHeight = 18.sp
+          )
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          OutlinedTextField(
+            value = customWebClientId,
+            onValueChange = { customWebClientId = it.trim() },
+            label = { Text("Custom Web Client ID (Optional)") },
+            placeholder = { Text("e.g. 123456-xxx.apps.googleusercontent.com", fontSize = 11.sp) },
+            colors = arenaTextFieldColors(),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+          )
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            showGmailSetupDialog = false
+            isLoading = true
+            errorMessage = null
+            viewModel.signInWithGoogle(
+              context = context,
+              webClientId = customWebClientId,
+              onSuccess = {
+                isLoading = false
+                onAuthSuccess()
+              },
+              onError = {
+                isLoading = false
+                errorMessage = it
+              }
+            )
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = ArenaCyan)
+        ) {
+          Text("TEST SIGN IN", color = ArenaBgDark, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showGmailSetupDialog = false }) {
+          Text("DONE", color = ArenaTextSecondary, fontSize = 12.sp)
         }
       }
     )
